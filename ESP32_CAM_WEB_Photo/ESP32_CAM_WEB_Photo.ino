@@ -11,6 +11,9 @@
   copies or substantial portions of the Software.
 *********/
 
+#define CAMERA_MODEL_AI_THINKER
+
+
 #include "WiFi.h"
 #include "esp_camera.h"
 #include "esp_timer.h"
@@ -39,6 +42,7 @@ boolean takeNewPhoto = false;
 #define XCLK_GPIO_NUM      0
 #define SIOD_GPIO_NUM     26
 #define SIOC_GPIO_NUM     27
+
 #define Y9_GPIO_NUM       35
 #define Y8_GPIO_NUM       34
 #define Y7_GPIO_NUM       39
@@ -50,6 +54,7 @@ boolean takeNewPhoto = false;
 #define VSYNC_GPIO_NUM    25
 #define HREF_GPIO_NUM     23
 #define PCLK_GPIO_NUM     22
+
 
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
