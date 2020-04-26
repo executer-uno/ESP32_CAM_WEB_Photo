@@ -1,6 +1,7 @@
 /*********
   Rui Santos
   Complete project details at https://RandomNerdTutorials.com/esp32-cam-take-photo-display-web-server/
+  Complete project details at https://RandomNerdTutorials.com/esp32-cam-take-photo-save-microsd-card
 
   IMPORTANT!!!
    - Select Board "AI Thinker ESP32-CAM"
@@ -12,7 +13,7 @@
 *********/
 
 #define CAMERA_MODEL_AI_THINKER
-
+//#define BUILD_IN_LED	4
 
 #include "WiFi.h"
 #include "esp_camera.h"
@@ -24,9 +25,14 @@
 #include "driver/rtc_io.h"
 #include <ESPAsyncWebServer.h>
 #include <StringArray.h>
-#include <SPIFFS.h>
-#include <FS.h>
+#include <FS.h>                // SD Card ESP32
+#include <SD_MMC.h>            // SD Card ESP32
 
+
+//EasyBMP library:
+#include "Libs/EasyBMP/EasyBMP.h"
+
+BMP Image;
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -34,7 +40,7 @@ AsyncWebServer server(80);
 boolean takeNewPhoto = false;
 
 // Photo File Name to save in SPIFFS
-#define FILE_PHOTO "/photo.jpg"
+#define FILE_PHOTO "/photo.bmp"
 
 // OV2640 camera module pins (CAMERA_MODEL_AI_THINKER)
 #define PWDN_GPIO_NUM     32
@@ -106,14 +112,29 @@ void setup() {
     delay(1000);
     Serial.println("Connecting to WiFi...");
   }
-  if (!SPIFFS.begin(true)) {
-    Serial.println("An Error has occurred while mounting SPIFFS");
+
+  Serial.println("Starting SD Card");
+  if(!SD_MMC.begin()){
+	Serial.println("SD Card Mount Failed");
     ESP.restart();
   }
   else {
     delay(500);
-    Serial.println("SPIFFS mounted successfully");
+    Serial.println("SD Card Mounted");
   }
+
+  uint8_t cardType = SD_MMC.cardType();
+  if(cardType == CARD_NONE){
+	Serial.println("No SD Card attached");
+    ESP.restart();
+  }
+  else {
+    delay(500);
+    Serial.println("SD card in slot");
+  }
+
+
+
 
   // Print ESP32 Local IP Address
   Serial.print("IP Address: http://");
@@ -154,6 +175,13 @@ void setup() {
     config.jpeg_quality = 12;
     config.fb_count = 1;
   }
+
+  // from Camera Counter OCR
+  config.frame_size = FRAMESIZE_QVGA;
+  config.pixel_format = PIXFORMAT_GRAYSCALE;
+  config.fb_count = 1;
+
+
   // Camera init
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
@@ -172,7 +200,7 @@ void setup() {
   });
 
   server.on("/saved-photo", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(SPIFFS, FILE_PHOTO, "image/jpg", false);
+    request->send(SD_MMC, FILE_PHOTO, "image/bmp", false);
   });
 
   // Start server
@@ -182,7 +210,7 @@ void setup() {
 
 void loop() {
   if (takeNewPhoto) {
-    capturePhotoSaveSpiffs();
+    capturePhotoSaveSD();
     takeNewPhoto = false;
   }
   delay(1);
@@ -196,7 +224,7 @@ bool checkPhoto( fs::FS &fs ) {
 }
 
 // Capture Photo and Save it to SPIFFS
-void capturePhotoSaveSpiffs( void ) {
+void capturePhotoSaveSD( void ) {
   camera_fb_t * fb = NULL; // pointer
   bool ok = 0; // Boolean indicating if the picture has been taken correctly
 
@@ -204,33 +232,73 @@ void capturePhotoSaveSpiffs( void ) {
     // Take a photo with the camera
     Serial.println("Taking a photo...");
 
+    // Turns on the ESP32-CAM white on-board LED (flash) connected to GPIO 4
+    //pinMode(BUILD_IN_LED, OUTPUT);
+    //digitalWrite(BUILD_IN_LED, HIGH);
+    //delay(10);
+
     fb = esp_camera_fb_get();
     if (!fb) {
       Serial.println("Camera capture failed");
       return;
     }
 
+    Image.SetSize(fb->width, fb->height);
+    Image.SetBitDepth(8);
+    CreateGrayscaleColorTable(Image);
+
+    Serial.println("Bitmap template prepared");
+
+
+    // convert each pixel to greyscale
+    for( int i=0 ; i < Image.TellWidth() ; i++)
+    {
+		for( int j=0 ; j < Image.TellHeight() ; j++)
+		{
+
+
+			uint32_t l = (j * fb->width + i);
+
+			Image(i,j)->Red   = fb->buf[l];
+			Image(i,j)->Green = fb->buf[l];
+			Image(i,j)->Blue  = fb->buf[l];
+
+			//*Image(i,j) = fb->buf[l];
+		}
+    }
+
+    Serial.println("Bitmap data filled");
+
+    Image.WriteToFile(FILE_PHOTO);
+
     // Photo file name
     Serial.printf("Picture file name: %s\n", FILE_PHOTO);
-    File file = SPIFFS.open(FILE_PHOTO, FILE_WRITE);
 
-    // Insert the data in the photo file
-    if (!file) {
-      Serial.println("Failed to open file in writing mode");
-    }
-    else {
-      file.write(fb->buf, fb->len); // payload (image), payload length
-      Serial.print("The picture has been saved in ");
-      Serial.print(FILE_PHOTO);
-      Serial.print(" - Size: ");
-      Serial.print(file.size());
-      Serial.println(" bytes");
-    }
-    // Close the file
-    file.close();
+//    File file = SD_MMC.open(FILE_PHOTO, FILE_WRITE);
+//
+//    // Insert the data in the photo file
+//    if (!file) {
+//      Serial.println("Failed to open file in writing mode");
+//    }
+//    else {
+//      file.write(fb->buf, fb->len); // payload (image), payload length
+//      Serial.print("The picture has been saved in ");
+//      Serial.print(FILE_PHOTO);
+//      Serial.print(" - Size: ");
+//      Serial.print(file.size());
+//      Serial.println(" bytes");
+//    }
+//    // Close the file
+//    file.close();
     esp_camera_fb_return(fb);
 
+
+    // Turns off the ESP32-CAM white on-board LED (flash) connected to GPIO 4
+    //pinMode(BUILD_IN_LED, INPUT);
+    //digitalWrite(BUILD_IN_LED, LOW);
+
+
     // check if file has been correctly saved in SPIFFS
-    ok = checkPhoto(SPIFFS);
+    ok = checkPhoto(SD_MMC);
   } while ( !ok );
 }
