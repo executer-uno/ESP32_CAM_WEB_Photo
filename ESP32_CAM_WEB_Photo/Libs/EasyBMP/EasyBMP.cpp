@@ -20,9 +20,6 @@
 
 #include "EasyBMP.h"
 
-#include <FS.h>
-#include <SD_MMC.h>
-
 /* These functions are defined in EasyBMP.h */
 
 bool EasyBMPwarnings = true;
@@ -440,8 +437,7 @@ bool BMP::WriteToFile( const char* FileName )
   return false; 
  }
  
- File fp = SD_MMC.open(FileName, FILE_WRITE);
- //FILE* fp = fopen( FileName, "wb" );
+ FILE* fp = fopen( FileName, "wb" );
  if( fp == NULL )
  {
   if( EasyBMPwarnings )
@@ -449,8 +445,7 @@ bool BMP::WriteToFile( const char* FileName )
    cout << "EasyBMP Error: Cannot open file " 
         << FileName << " for output." << endl;
   }
-  fp.close();
-  //fclose( fp );
+  fclose( fp );
   return false;
  }
   
@@ -489,11 +484,11 @@ bool BMP::WriteToFile( const char* FileName )
  if( IsBigEndian() )
  { bmfh.SwitchEndianess(); }
  
- fp.write( (uint8_t*) &(bmfh.bfType) 		, sizeof(ebmpWORD));
- fp.write( (uint8_t*) &(bmfh.bfSize) 		, sizeof(ebmpDWORD));
- fp.write( (uint8_t*) &(bmfh.bfReserved1) 	, sizeof(ebmpWORD));
- fp.write( (uint8_t*) &(bmfh.bfReserved2) 	, sizeof(ebmpWORD));
- fp.write( (uint8_t*) &(bmfh.bfOffBits) 	, sizeof(ebmpDWORD));
+ fwrite( (char*) &(bmfh.bfType) , sizeof(ebmpWORD) , 1 , fp );
+ fwrite( (char*) &(bmfh.bfSize) , sizeof(ebmpDWORD) , 1 , fp );
+ fwrite( (char*) &(bmfh.bfReserved1) , sizeof(ebmpWORD) , 1 , fp );
+ fwrite( (char*) &(bmfh.bfReserved2) , sizeof(ebmpWORD) , 1 , fp );
+ fwrite( (char*) &(bmfh.bfOffBits) , sizeof(ebmpDWORD) , 1 , fp );
  
  // write the info header 
  
@@ -524,17 +519,17 @@ bool BMP::WriteToFile( const char* FileName )
  if( IsBigEndian() )
  { bmih.SwitchEndianess(); }
  
- fp.write( (uint8_t*) &(bmih.biSize) , sizeof(ebmpDWORD));
- fp.write( (uint8_t*) &(bmih.biWidth) , sizeof(ebmpDWORD));
- fp.write( (uint8_t*) &(bmih.biHeight) , sizeof(ebmpDWORD));
- fp.write( (uint8_t*) &(bmih.biPlanes) , sizeof(ebmpWORD));
- fp.write( (uint8_t*) &(bmih.biBitCount) , sizeof(ebmpWORD));
- fp.write( (uint8_t*) &(bmih.biCompression) , sizeof(ebmpDWORD));
- fp.write( (uint8_t*) &(bmih.biSizeImage) , sizeof(ebmpDWORD));
- fp.write( (uint8_t*) &(bmih.biXPelsPerMeter) , sizeof(ebmpDWORD));
- fp.write( (uint8_t*) &(bmih.biYPelsPerMeter) , sizeof(ebmpDWORD));
- fp.write( (uint8_t*) &(bmih.biClrUsed) , sizeof(ebmpDWORD));
- fp.write( (uint8_t*) &(bmih.biClrImportant) , sizeof(ebmpDWORD));
+ fwrite( (char*) &(bmih.biSize) , sizeof(ebmpDWORD) , 1 , fp );
+ fwrite( (char*) &(bmih.biWidth) , sizeof(ebmpDWORD) , 1 , fp );
+ fwrite( (char*) &(bmih.biHeight) , sizeof(ebmpDWORD) , 1 , fp );
+ fwrite( (char*) &(bmih.biPlanes) , sizeof(ebmpWORD) , 1 , fp );
+ fwrite( (char*) &(bmih.biBitCount) , sizeof(ebmpWORD) , 1 , fp );
+ fwrite( (char*) &(bmih.biCompression) , sizeof(ebmpDWORD) , 1 , fp );
+ fwrite( (char*) &(bmih.biSizeImage) , sizeof(ebmpDWORD) , 1 , fp );
+ fwrite( (char*) &(bmih.biXPelsPerMeter) , sizeof(ebmpDWORD) , 1 , fp );
+ fwrite( (char*) &(bmih.biYPelsPerMeter) , sizeof(ebmpDWORD) , 1 , fp ); 
+ fwrite( (char*) &(bmih.biClrUsed) , sizeof(ebmpDWORD) , 1 , fp);
+ fwrite( (char*) &(bmih.biClrImportant) , sizeof(ebmpDWORD) , 1 , fp);
  
  // write the palette 
  if( BitDepth == 1 || BitDepth == 4 || BitDepth == 8 )
@@ -551,7 +546,7 @@ bool BMP::WriteToFile( const char* FileName )
    
   int n;
   for( n=0 ; n < NumberOfColors ; n++ )
-  { fp.write( (uint8_t*) &(Colors[n]) , 4); }
+  { fwrite( (char*) &(Colors[n]) , 4 , 1 , fp ); }
  }
  
  // write the pixels 
@@ -586,7 +581,7 @@ bool BMP::WriteToFile( const char* FileName )
    { Success = Write1bitRow( Buffer, BufferSize, j ); }
    if( Success )
    {
-    int BytesWritten = (int) fp.write( (uint8_t*) Buffer, BufferSize);
+    int BytesWritten = (int) fwrite( (char*) Buffer, 1, BufferSize, fp );
     if( BytesWritten != BufferSize )
     { Success = false; }
    }
@@ -615,18 +610,18 @@ bool BMP::WriteToFile( const char* FileName )
   
   if( IsBigEndian() )
   { RedMask = FlipWORD( RedMask ); }
-  fp.write( (uint8_t*) &RedMask  , 2);
-  fp.write( (uint8_t*) &ZeroWORD , 2);
+  fwrite( (char*) &RedMask , 2 , 1 , fp );
+  fwrite( (char*) &ZeroWORD , 2 , 1 , fp );
 
   if( IsBigEndian() )
   { GreenMask = FlipWORD( GreenMask ); }
-  fp.write( (uint8_t*) &GreenMask , 2);
-  fp.write( (uint8_t*) &ZeroWORD  , 2);
+  fwrite( (char*) &GreenMask , 2 , 1 , fp );
+  fwrite( (char*) &ZeroWORD , 2 , 1 , fp );
 
   if( IsBigEndian() )
   { BlueMask = FlipWORD( BlueMask ); }
-  fp.write( (uint8_t*) &BlueMask , 2 );
-  fp.write( (uint8_t*) &ZeroWORD , 2 );
+  fwrite( (char*) &BlueMask , 2 , 1 , fp );
+  fwrite( (char*) &ZeroWORD , 2 , 1 , fp );
 
   int DataBytes = Width*2;
   int PaddingBytes = ( 4 - DataBytes % 4 ) % 4;
@@ -650,7 +645,7 @@ bool BMP::WriteToFile( const char* FileName )
 	if( IsBigEndian() )
 	{ TempWORD = FlipWORD( TempWORD ); }
 	
-	fp.write( (uint8_t*) &TempWORD , 2);
+    fwrite( (char*) &TempWORD , 2, 1, fp);
     WriteNumber += 2;
 	i++;
    }
@@ -659,14 +654,14 @@ bool BMP::WriteToFile( const char* FileName )
    while( WriteNumber < PaddingBytes )
    {
     ebmpBYTE TempBYTE;
-    fp.write( (uint8_t*) &TempBYTE , 1);
+    fwrite( (char*) &TempBYTE , 1, 1, fp);
     WriteNumber++;
    }
   }
   
  }
 
- fp.close();
+ fclose(fp);
  return true;
 }
 
