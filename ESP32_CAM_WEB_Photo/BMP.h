@@ -20,36 +20,64 @@ class BMP
   }
   
 public:  
-  static const int headerSize = 54 + 12;
+  static const int headerSize16 = 54 + 12;
+  static const int headerSize24 = 54;
   
+  //https://itnext.io/bits-to-bitmaps-a-simple-walkthrough-of-bmp-image-format-765dc6857393
   static void construct16BitHeader(void *buffer, long xres, long yres)
   {
-    setChar(buffer,  0, 'B');
-    setChar(buffer,  1, 'M');
+	  long bytesPerLine = xres * 3;			//TODO padding
+	  setChar(buffer,  0, 'B');
+	  setChar(buffer,  1, 'M');
+	  setLong(buffer,  2, bytesPerLine * yres  + headerSize16); //filesize
+	  setLong(buffer,  6, 0);
+	  setLong(buffer,  10, headerSize16); 	//offset for pixeldata
 
-    long bytesPerLine = xres * 2;
-    setLong(buffer,  2, bytesPerLine * yres  + 54 + 12); //filesize
-    setLong(buffer,  6, 0);
-    
-    setLong(buffer,  10, 54 + 12); //offset
 
-    setLong(buffer,  14, 40); //header size
-    setLong(buffer,  18, xres);
-    setLong(buffer,  22, yres);
-    setShort(buffer, 26, 1); //planes
-    setShort(buffer, 28, 16); //bits
+	  setLong(buffer,  14, 40); 		//header size
+	  setLong(buffer,  18, xres);
+	  setLong(buffer,  22, yres);
+	  setShort(buffer, 26, 1); 		//planes
+	  setShort(buffer, 28, 16); 		//bits
 
-    setLong(buffer,  30, 3); //compression 3 = bit fields
-    setLong(buffer,  38, 0); //x pix per meter
-    setLong(buffer,  42, 0); //y pix per meter
+	  setLong(buffer,  30, 3); 		//compression 3 = bit fields
+	  setLong(buffer,  38, 0); 		//x pix per meter
+	  setLong(buffer,  42, 0); 		//y pix per meter
 
-    setLong(buffer,  46, 0); //biClrUsed
-    setLong(buffer,  50, 0); //biClrImportant
+	  setLong(buffer,  46, 0); 		//biClrUsed
+	  setLong(buffer,  50, 0); 		//biClrImportant
 
-    setLong(buffer,  54, 0xF800); //R mask
-    setLong(buffer,  58, 0x07E0); //G mask
-    setLong(buffer,  62, 0x001F); //B mask
+	  setLong(buffer,  54, 0xF800); //R mask
+	  setLong(buffer,  58, 0x07E0); //G mask
+	  setLong(buffer,  62, 0x001F); //B mask
   }
+
+  static void construct24BitHeader(void *buffer, long xres, long yres)
+  {
+	  long bytesPerLine = xres * 2;
+	  setChar(buffer,  0, 'B');
+	  setChar(buffer,  1, 'M');
+	  setLong(buffer,  2, bytesPerLine * yres  + headerSize24); //filesize
+	  setLong(buffer,  6, 0);
+	  setLong(buffer,  10, headerSize24); 	//offset for pixeldata
+
+
+	  setLong(buffer,  14, 40); 		//header size
+	  setLong(buffer,  18, xres);
+	  setLong(buffer,  22, yres);
+	  setShort(buffer, 26, 1); 		//planes
+	  setShort(buffer, 28, 24); 		//bits
+
+	  setLong(buffer,  30, 0); 		//compression none. 3 bytes per pixel
+	  setLong(buffer,  38, 0); 		//x pix per meter
+	  setLong(buffer,  42, 0); 		//y pix per meter
+
+	  setLong(buffer,  46, 0); 		//biClrUsed
+	  setLong(buffer,  50, 0); 		//biClrImportant
+
+  }
+
+
 };
 
 

@@ -29,7 +29,7 @@
 
 // Import BMP header constructor by https://github.com/bitluni/ESP32CameraI2S
 #include "BMP.h"
-unsigned char bmpHeader[BMP::headerSize];
+unsigned char bmpHeader[BMP::headerSize24];
 
 camera_fb_t * fb = NULL; // pointer to camera image data
 
@@ -144,7 +144,7 @@ void setup() {
 
   // from Camera Counter OCR
   config.frame_size = FRAMESIZE_QVGA;//FRAMESIZE_QQVGA;//FRAMESIZE_QVGA;
-  config.pixel_format = PIXFORMAT_RGB565;//PIXFORMAT_GRAYSCALE;
+  config.pixel_format = PIXFORMAT_GRAYSCALE;//PIXFORMAT_RGB565;//PIXFORMAT_GRAYSCALE;
   config.fb_count = 1;
 
   // Camera init
@@ -155,14 +155,27 @@ void setup() {
   }
 
   // Prepare bitmap header
+  uint16_t w_size=0;
+  uint16_t h_size=0;
+
   if(config.frame_size == FRAMESIZE_QVGA){
-	  BMP::construct16BitHeader(bmpHeader, 320, 240);	// ! constants
+	  w_size = 320;
+	  h_size = 240;
   }
   else if(config.frame_size == FRAMESIZE_QQVGA){
-	  BMP::construct16BitHeader(bmpHeader, 160, 120);	// ! constants
+	  w_size = 160;
+	  h_size = 120;
   }
   else{
-	  BMP::construct16BitHeader(bmpHeader, 100, 100);	// ! constants
+	  w_size = 100;
+	  h_size = 100;
+	  Serial.println("Undefined image size!!");
+  }
+  if(config.pixel_format == PIXFORMAT_GRAYSCALE){
+	  BMP::construct24BitHeader(bmpHeader, w_size, h_size);
+  }
+  else{
+	  BMP::construct16BitHeader(bmpHeader, w_size, h_size);
   }
 
   // Route for root / web page
@@ -200,8 +213,8 @@ void setup() {
 
 int genBMPChunk(char *buffer, int maxLen, size_t index)
 {
-	  size_t BMPSize = BMP::headerSize + fb->len;
-      size_t max = (ESP.getFreeHeap() / 3) & 0xFFE0;
+	  size_t BMPSize = BMP::headerSize24 + (fb->len * 3);        //TODO
+      size_t max 	 = (ESP.getFreeHeap() / 3) & 0xFFE0;
 
       // Get the chunk based on the index and maxLen
       size_t len = BMPSize - index;
@@ -209,12 +222,22 @@ int genBMPChunk(char *buffer, int maxLen, size_t index)
       if (len > max) len = max;
       if (len > 0){
     	  if(0==index){
-    		  memcpy_P(buffer, bmpHeader + index, BMP::headerSize);
-    		  len = BMP::headerSize;
+    		  memcpy_P(buffer, bmpHeader + index, BMP::headerSize24);
+    		  len = BMP::headerSize24;
     		  Serial.printf(PSTR("[WEB] Sending BMP (max chunk size: %4d) "), max);
     	  }
     	  else{
-    		  memcpy_P(buffer, fb->buf + index - BMP::headerSize, len);
+    		  if(fb->format==PIXFORMAT_GRAYSCALE){
+				for(uint32_t i = 0; i < len; i+=3){
+					uint8_t Gray = *(fb->buf + (index - BMP::headerSize24 + i)/3);
+					*(buffer + i + 0) = Gray;
+					*(buffer + i + 1) = Gray;
+					*(buffer + i + 2) = Gray;
+				}
+    		  }
+    		  else{
+    			  memcpy_P(buffer, fb->buf + index - BMP::headerSize24, len);
+    		  }
     		  Serial.printf(PSTR("."));
     	  }
       }
@@ -257,13 +280,15 @@ void capturePhoto() {
 	//direct save to BMP is not possible - reverse bytes order
     //fixing procedure:
 
-    //Read 320x240x2 byte from FIFO
-    //Save as RGB565 bmp format
-    for(uint32_t i = 0; i < fb->len; i+=2){
-    	// swap bytes
-    	uint8_t tmp = *(fb->buf + i);
-    	*(fb->buf + i) = *(fb->buf + i+1);
-    	*(fb->buf + i+1) = tmp;
+    if(fb->format == PIXFORMAT_RGB565){
+		//Read 320x240x2 byte from buffer
+		//Save as RGB565 bmp format
+		for(uint32_t i = 0; i < fb->len; i+=2){
+			// swap bytes
+			uint8_t tmp = *(fb->buf + i);
+			*(fb->buf + i) = *(fb->buf + i+1);
+			*(fb->buf + i+1) = tmp;
+		}
     }
 
 }
