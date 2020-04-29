@@ -338,37 +338,61 @@ void setup() {
 	  // test
 
 	  Serial.printf("sizeof(fb->buf)=%i, sizeof(favicon_ico_gz)=%i\r\n",sizeof(fb->buf), sizeof(favicon_ico_gz));
+	  //Serial.printf("Camera capture done. W=%i, H=%i, bytes=%i\r\n",fb->width, fb->height, fb->len);
 
-	  Serial.println("beginResponseStream...");
-	  AsyncResponseStream *response = request->beginResponseStream("image/x-windows-bmp");
-	  response->addHeader("Content-Disposition", "inline; filename=capture.bmp");
-	  Serial.println("bmpHeader...");
-	  response->write(bmpHeader, BMP::headerSize);
-	  Serial.printf("Camera capture done. W=%i, H=%i, bytes=%i\r\n",fb->width, fb->height, fb->len);
-
-	  //response->write(fb->buf, 1000);
-	  //Serial.printf("response->write 1k done\r\n");
-	  //response->write(fb->buf + 1000, fb->len - 1000);
-
-	  size_t s = fb->len;
-	  while(s > 0){
-		  Serial.printf("Bytes to send %i, content len %i\r\n", s,request->contentLength());
-		  s -= response->write(fb->buf + (fb->len - s), (s<10000 ? s : 10000));
-	  }
+	  //Serial.println("beginResponseStream...");
+	  //AsyncResponseStream *response = request->beginResponseStream("image/x-windows-bmp");
+	  //response->addHeader("Content-Disposition", "inline; filename=capture.bmp");
+	  //response->write(bmpHeader, BMP::headerSize);
 
 
-	  Serial.println("Call request->send...");
+      // Chunked response, we calculate the chunks based on free heap (in multiples of 32)
+      // This is necessary when a TLS connection is open since it sucks too much memory
+	  // https://github.com/helderpe/espurna/blob/76ad9cde5a740822da9fe6e3f369629fa4b59ebc/code/espurna/web.ino
+	  Serial.printf(PSTR("[MAIN] Free heap: %d bytes\n"), ESP.getFreeHeap());
+      size_t max = (ESP.getFreeHeap() / 3) & 0xFFE0;
 
-	  //send the response last
+	  AsyncWebServerResponse *response = request->beginChunkedResponse("image/x-icon",[max](uint8_t *buffer, size_t maxLen, size_t index) -> size_t{
+
+          // Get the chunk based on the index and maxLen
+          size_t len = favicon_ico_gz_len - index;
+          if (len > maxLen) len = maxLen;
+          if (len > max) len = max;
+          if (len > 0) memcpy_P(buffer, favicon_ico_gz + index, len);
+
+          Serial.printf(PSTR("[WEB] Sending %d%%%% (max chunk size: %4d)\r"), int(100 * index / favicon_ico_gz_len), max);
+          if (len == 0) Serial.printf(PSTR("\n"));
+
+          // Return the actual length of the chunk (0 for end of file)
+          return len;
+
+      });
+
+	  response->addHeader("Content-Encoding", "gzip");
 	  request->send(response);
 
   });
 
   // Start server
   server.begin();
-
-
 }
+
+
+int genJsonLog(uint8_t *buffer, size_t maxLen, size_t index)
+{
+	int sz = 0;
+
+	if(0 == index){
+		buffer = (uint8_t*)favicon_ico_gz_p1;
+		sz = favicon_ico_gz_p1_len;
+	}
+	else{
+		buffer = (uint8_t*)favicon_ico_gz_p2;
+		sz = favicon_ico_gz_p2_len;
+	}
+	return (sz > 0) ? sz : 0;
+}
+
 
 void loop() {
   if (takeNewPhoto) {
